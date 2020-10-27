@@ -19,20 +19,28 @@
 package quotas
 
 import (
-	"github.com/emicklei/go-restful"
 	"net/http"
+
+	"github.com/emicklei/go-restful"
 
 	"kubesphere.io/kubesphere/pkg/server/errors"
 
+	k8serr "k8s.io/apimachinery/pkg/api/errors"
+	"kubesphere.io/kubesphere/pkg/constants"
 	"kubesphere.io/kubesphere/pkg/models/quotas"
 )
 
 func GetNamespaceQuotas(req *restful.Request, resp *restful.Response) {
 	namespace := req.PathParameter("namespace")
-	quota, err := quotas.GetNamespaceQuotas(namespace)
+	username := req.HeaderParameter(constants.UserNameHeader)
+	quota, err := quotas.GetNamespaceQuotas(namespace, username)
 
 	if err != nil {
-		resp.WriteHeaderAndEntity(http.StatusInternalServerError, errors.Wrap(err))
+		if k8serr.IsNotFound(err) {
+			resp.WriteHeaderAndEntity(http.StatusNotFound, errors.Wrap(err))
+		} else {
+			resp.WriteHeaderAndEntity(http.StatusInternalServerError, errors.Wrap(err))
+		}
 		return
 	}
 

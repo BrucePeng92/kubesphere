@@ -19,12 +19,13 @@ package iam
 
 import (
 	"fmt"
-	"k8s.io/klog"
-	"kubesphere.io/kubesphere/pkg/models/resources"
-	"kubesphere.io/kubesphere/pkg/server/params"
 	"net/http"
 	"net/mail"
 	"strings"
+
+	"k8s.io/klog"
+	"kubesphere.io/kubesphere/pkg/models/resources"
+	"kubesphere.io/kubesphere/pkg/server/params"
 
 	"github.com/emicklei/go-restful"
 	"github.com/go-ldap/ldap"
@@ -68,6 +69,7 @@ func CreateUser(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
+	user.Baomi = "gongkai"
 	created, err := iam.CreateUser(&user)
 
 	if err != nil {

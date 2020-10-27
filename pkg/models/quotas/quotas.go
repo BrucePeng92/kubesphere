@@ -19,14 +19,20 @@
 package quotas
 
 import (
-	"k8s.io/api/core/v1"
+	"strings"
+
+	v1 "k8s.io/api/core/v1"
+	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog"
+	"kubesphere.io/kubesphere/pkg/apis/devops/v1alpha1"
 	"kubesphere.io/kubesphere/pkg/informers"
 	"kubesphere.io/kubesphere/pkg/models"
+	iam "kubesphere.io/kubesphere/pkg/models/iam"
 	"kubesphere.io/kubesphere/pkg/models/resources"
 	"kubesphere.io/kubesphere/pkg/server/params"
+	baomi "kubesphere.io/kubesphere/pkg/utils/baomi"
 )
 
 const (
@@ -105,7 +111,29 @@ func GetClusterQuotas() (*models.ResourceQuota, error) {
 
 }
 
-func GetNamespaceQuotas(namespace string) (*NamespacedResourceQuota, error) {
+func GetNamespaceQuotas(namespace string, username string) (*NamespacedResourceQuota, error) {
+	user, err := iam.GetUserInfo(username)
+	if err != nil {
+		return nil, err
+	}
+	userBaomi := user.Baomi
+	ns, err := informers.SharedInformerFactory().Core().V1().Namespaces().Lister().Get(namespace)
+	if err != nil {
+		return nil, err
+	}
+	annotations := ns.GetAnnotations()
+	nodeSelector := annotations["scheduler.alpha.kubernetes.io/node-selector"]
+	label := strings.Split(nodeSelector, "=")
+	nsBaomi := ""
+	if len(label) > 0 {
+		nsBaomi = label[1]
+	}
+	pass, err := baomi.IsContain(userBaomi, nsBaomi)
+	if pass || err != nil {
+		err := k8serr.NewNotFound(v1alpha1.Resource("namespace"), namespace)
+		return nil, err
+	}
+
 	quota, err := getNamespaceResourceQuota(namespace)
 	if err != nil {
 		klog.Error(err)

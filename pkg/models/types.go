@@ -18,10 +18,11 @@
 package models
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	"time"
 
-	"k8s.io/api/rbac/v1"
+	corev1 "k8s.io/api/core/v1"
+
+	v1 "k8s.io/api/rbac/v1"
 )
 
 type PageableResponse struct {
@@ -69,6 +70,7 @@ type User struct {
 	RoleBinding     string            `json:"role_binding,omitempty"`
 	RoleBindTime    *time.Time        `json:"role_bind_time,omitempty"`
 	WorkspaceRole   string            `json:"workspace_role,omitempty"`
+	Baomi           string            `json:"baomi,omitempty"`
 }
 
 type Group struct {

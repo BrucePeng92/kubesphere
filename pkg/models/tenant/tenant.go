@@ -18,15 +18,19 @@
 package tenant
 
 import (
-	"k8s.io/api/core/v1"
+	"strconv"
+
+	v1 "k8s.io/api/core/v1"
+	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	"kubesphere.io/kubesphere/pkg/apis/tenant/v1alpha1"
 	"kubesphere.io/kubesphere/pkg/constants"
 	"kubesphere.io/kubesphere/pkg/informers"
 	"kubesphere.io/kubesphere/pkg/models"
+	iam "kubesphere.io/kubesphere/pkg/models/iam"
 	ws "kubesphere.io/kubesphere/pkg/models/workspaces"
 	"kubesphere.io/kubesphere/pkg/server/params"
 	"kubesphere.io/kubesphere/pkg/simple/client"
-	"strconv"
+	baomi "kubesphere.io/kubesphere/pkg/utils/baomi"
 )
 
 var (
@@ -42,6 +46,13 @@ func CreateNamespace(workspaceName string, namespace *v1.Namespace, username str
 		namespace.Annotations[constants.CreatorAnnotationKey] = username
 	}
 
+	user, err := iam.GetUserInfo(username)
+	if err != nil {
+		return nil, err
+	}
+	userBaomi := user.Baomi
+
+	namespace.Annotations["scheduler.alpha.kubernetes.io/node-selector"] = "baomi=" + userBaomi
 	namespace.Labels[constants.WorkspaceLabelKey] = workspaceName
 
 	return client.ClientSets().K8s().Kubernetes().CoreV1().Namespaces().Create(namespace)
@@ -49,8 +60,19 @@ func CreateNamespace(workspaceName string, namespace *v1.Namespace, username str
 
 func DescribeWorkspace(username, workspaceName string) (*v1alpha1.Workspace, error) {
 	workspace, err := informers.KsSharedInformerFactory().Tenant().V1alpha1().Workspaces().Lister().Get(workspaceName)
-
 	if err != nil {
+		return nil, err
+	}
+	annotations := workspace.GetAnnotations()
+	workspaceBaomi := annotations["baomi"]
+	user, err := iam.GetUserInfo(username)
+	if err != nil {
+		return nil, err
+	}
+	userBaomi := user.Baomi
+	pass, err := baomi.IsContain(userBaomi, workspaceBaomi)
+	if pass || err != nil {
+		err := k8serr.NewNotFound(v1alpha1.Resource("workspace"), workspaceName)
 		return nil, err
 	}
 

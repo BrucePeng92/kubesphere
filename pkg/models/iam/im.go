@@ -21,8 +21,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/emicklei/go-restful"
 	"io/ioutil"
+	"net/http"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/emicklei/go-restful"
 	"k8s.io/klog"
 	"kubesphere.io/kubesphere/pkg/constants"
 	"kubesphere.io/kubesphere/pkg/db"
@@ -34,12 +41,6 @@ import (
 	clientset "kubesphere.io/kubesphere/pkg/simple/client"
 	"kubesphere.io/kubesphere/pkg/utils/k8sutil"
 	"kubesphere.io/kubesphere/pkg/utils/sliceutil"
-	"net/http"
-	"regexp"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-ldap/ldap"
@@ -576,7 +577,7 @@ func ListUsers(conditions *params.Conditions, orderBy string, reverse bool, limi
 			client.UserSearchBase(),
 			ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 			filter,
-			[]string{"uid", "mail", "description", "preferredLanguage", "createTimestamp"},
+			[]string{"uid", "mail", "description", "preferredLanguage", "createTimestamp", "initials"},
 			[]ldap.Control{pageControl},
 		)
 
@@ -588,14 +589,14 @@ func ListUsers(conditions *params.Conditions, orderBy string, reverse bool, limi
 		}
 
 		for _, entry := range response.Entries {
-
 			uid := entry.GetAttributeValue("uid")
 			email := entry.GetAttributeValue("mail")
 			description := entry.GetAttributeValue("description")
 			lang := entry.GetAttributeValue("preferredLanguage")
 			createTimestamp, _ := time.Parse("20060102150405Z", entry.GetAttributeValue("createTimestamp"))
+			baomi := entry.GetAttributeValue("initials")
 
-			user := models.User{Username: uid, Email: email, Description: description, Lang: lang, CreateTime: createTimestamp}
+			user := models.User{Username: uid, Email: email, Description: description, Lang: lang, CreateTime: createTimestamp, Baomi: baomi}
 
 			if !shouldHidden(user) {
 				users = append(users, user)
@@ -689,7 +690,7 @@ func GetUserInfo(username string) (*models.User, error) {
 		client.UserSearchBase(),
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		fmt.Sprintf("(&(objectClass=inetOrgPerson)(uid=%s))", username),
-		[]string{"mail", "description", "preferredLanguage", "createTimestamp"},
+		[]string{"mail", "description", "preferredLanguage", "createTimestamp", "initials"},
 		nil,
 	)
 
@@ -708,7 +709,9 @@ func GetUserInfo(username string) (*models.User, error) {
 	description := result.Entries[0].GetAttributeValue("description")
 	lang := result.Entries[0].GetAttributeValue("preferredLanguage")
 	createTimestamp, _ := time.Parse("20060102150405Z", result.Entries[0].GetAttributeValue("createTimestamp"))
-	user := &models.User{Username: username, Email: email, Description: description, Lang: lang, CreateTime: createTimestamp}
+	baomi := result.Entries[0].GetAttributeValue("initials")
+
+	user := &models.User{Username: username, Email: email, Description: description, Lang: lang, CreateTime: createTimestamp, Baomi: baomi}
 
 	user.LastLoginTime = getLastLoginTime(username)
 
@@ -969,6 +972,7 @@ func CreateUser(user *models.User) (*models.User, error) {
 	user.Email = strings.TrimSpace(user.Email)
 	user.Password = strings.TrimSpace(user.Password)
 	user.Description = strings.TrimSpace(user.Description)
+	user.Baomi = strings.TrimSpace(user.Baomi)
 
 	client, err := clientset.ClientSets().Ldap()
 	if err != nil {
@@ -1018,6 +1022,7 @@ func CreateUser(user *models.User) (*models.User, error) {
 	userCreateRequest.Attribute("uidNumber", []string{strconv.Itoa(maxUid)})         // RFC2307: An integer uniquely identifying a user in an administrative domain
 	userCreateRequest.Attribute("mail", []string{user.Email})                        // RFC1274: RFC822 Mailbox
 	userCreateRequest.Attribute("userPassword", []string{user.Password})             // RFC4519/2307: password of user
+	userCreateRequest.Attribute("initials", []string{user.Baomi})
 	if user.Lang != "" {
 		userCreateRequest.Attribute("preferredLanguage", []string{user.Lang})
 	}
@@ -1179,6 +1184,10 @@ func UpdateUser(user *models.User) (*models.User, error) {
 
 	if user.Password != "" {
 		userModifyRequest.Replace("userPassword", []string{user.Password})
+	}
+
+	if user.Baomi != "" {
+		userModifyRequest.Replace("initials", []string{user.Baomi})
 	}
 
 	err = conn.Modify(userModifyRequest)
@@ -1479,6 +1488,12 @@ func WorkspaceUsersTotalCount(workspace string) (int, error) {
 func ListWorkspaceUsers(workspace string, conditions *params.Conditions, orderBy string, reverse bool, limit, offset int) (*models.PageableResponse, error) {
 
 	workspaceRoleBindings, err := GetWorkspaceRoleBindings(workspace)
+	workspaceEntity, err := informers.KsSharedInformerFactory().Tenant().V1alpha1().Workspaces().Lister().Get(workspace)
+	if err != nil {
+		return nil, err
+	}
+	annotations := workspaceEntity.GetAnnotations()
+	workspaceBaomi := annotations["baomi"]
 
 	if err != nil {
 		return nil, err
@@ -1490,12 +1505,13 @@ func ListWorkspaceUsers(workspace string, conditions *params.Conditions, orderBy
 		for _, subject := range roleBinding.Subjects {
 			if subject.Kind == rbacv1.UserKind && !k8sutil.ContainsUser(users, subject.Name) {
 				user, err := GetUserInfo(subject.Name)
+				userBaomi := user.Baomi
 				if err != nil {
 					return nil, err
 				}
 				prefix := fmt.Sprintf("workspace:%s:", workspace)
 				user.WorkspaceRole = fmt.Sprintf("workspace-%s", strings.TrimPrefix(roleBinding.Name, prefix))
-				if matchConditions(conditions, user) {
+				if matchConditions(conditions, user) && userBaomi == workspaceBaomi {
 					users = append(users, user)
 				}
 			}
