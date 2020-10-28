@@ -71,7 +71,7 @@ func DescribeWorkspace(username, workspaceName string) (*v1alpha1.Workspace, err
 	}
 	userBaomi := user.Baomi
 	pass, err := baomi.IsContain(userBaomi, workspaceBaomi)
-	if pass || err != nil {
+	if !pass || err != nil {
 		err := k8serr.NewNotFound(v1alpha1.Resource("workspace"), workspaceName)
 		return nil, err
 	}

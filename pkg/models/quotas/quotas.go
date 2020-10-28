@@ -129,7 +129,7 @@ func GetNamespaceQuotas(namespace string, username string) (*NamespacedResourceQ
 		nsBaomi = label[1]
 	}
 	pass, err := baomi.IsContain(userBaomi, nsBaomi)
-	if pass || err != nil {
+	if !pass || err != nil {
 		err := k8serr.NewNotFound(v1alpha1.Resource("namespace"), namespace)
 		return nil, err
 	}

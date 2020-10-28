@@ -30,6 +30,10 @@ import (
 	"kubesphere.io/kubesphere/pkg/models/quotas"
 )
 
+type ns_inaccessible struct {
+	data string
+}
+
 func GetNamespaceQuotas(req *restful.Request, resp *restful.Response) {
 	namespace := req.PathParameter("namespace")
 	username := req.HeaderParameter(constants.UserNameHeader)
@@ -37,7 +41,9 @@ func GetNamespaceQuotas(req *restful.Request, resp *restful.Response) {
 
 	if err != nil {
 		if k8serr.IsNotFound(err) {
-			resp.WriteHeaderAndEntity(http.StatusNotFound, errors.Wrap(err))
+			resp.WriteAsJson(struct {
+				Data string `json:"data"`
+			}{Data: "Namespace inaccessible"})
 		} else {
 			resp.WriteHeaderAndEntity(http.StatusInternalServerError, errors.Wrap(err))
 		}
