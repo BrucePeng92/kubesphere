@@ -48,6 +48,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"kubesphere.io/kubesphere/pkg/models"
+	baomi "kubesphere.io/kubesphere/pkg/utils/baomi"
 	"kubesphere.io/kubesphere/pkg/utils/jwtutil"
 )
 
@@ -1511,7 +1512,11 @@ func ListWorkspaceUsers(workspace string, conditions *params.Conditions, orderBy
 				}
 				prefix := fmt.Sprintf("workspace:%s:", workspace)
 				user.WorkspaceRole = fmt.Sprintf("workspace-%s", strings.TrimPrefix(roleBinding.Name, prefix))
-				if matchConditions(conditions, user) && userBaomi == workspaceBaomi {
+				pass, err := baomi.IsContain(userBaomi, workspaceBaomi)
+				if err != nil {
+					return nil, err
+				}
+				if matchConditions(conditions, user) && pass {
 					users = append(users, user)
 				}
 			}

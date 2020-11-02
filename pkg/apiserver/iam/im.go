@@ -38,6 +38,7 @@ import (
 
 func CreateUser(req *restful.Request, resp *restful.Response) {
 	var user models.User
+	operator := req.HeaderParameter(constants.UserNameHeader)
 
 	err := req.ReadEntity(&user)
 
@@ -71,6 +72,8 @@ func CreateUser(req *restful.Request, resp *restful.Response) {
 
 	user.Baomi = "gongkai"
 	created, err := iam.CreateUser(&user)
+	user.Password = ""
+	klog.Infoln(operator, ":  create user:  ", user)
 
 	if err != nil {
 		if ldap.IsErrorWithCode(err, ldap.LDAPResultEntryAlreadyExists) {
@@ -99,6 +102,7 @@ func DeleteUser(req *restful.Request, resp *restful.Response) {
 	}
 
 	err := iam.DeleteUser(username)
+	klog.Infoln(operator, ":  delete user:  ", username)
 
 	if err != nil {
 		klog.Info(err)
@@ -176,6 +180,9 @@ func UpdateUser(req *restful.Request, resp *restful.Response) {
 	}
 
 	result, err := iam.UpdateUser(&user)
+	user.Password = ""
+	user.CurrentPassword = ""
+	klog.Infoln(usernameInHeader, ":  update user:  ", user)
 
 	if err != nil {
 		if ldap.IsErrorWithCode(err, ldap.LDAPResultEntryAlreadyExists) {

@@ -177,6 +177,7 @@ func CreateNamespace(req *restful.Request, resp *restful.Response) {
 	}
 
 	created, err := tenant.CreateNamespace(workspaceName, &namespace, username)
+	klog.Infoln(username, ":  create namespace:  ", namespace)
 
 	if err != nil {
 		if k8serr.IsAlreadyExists(err) {
@@ -192,8 +193,10 @@ func CreateNamespace(req *restful.Request, resp *restful.Response) {
 func DeleteNamespace(req *restful.Request, resp *restful.Response) {
 	workspaceName := req.PathParameter("workspace")
 	namespaceName := req.PathParameter("namespace")
+	username := req.HeaderParameter(constants.UserNameHeader)
 
 	err := workspaces.DeleteNamespace(workspaceName, namespaceName)
+	klog.Infoln(username, ":  delete namespace:  ", namespaceName)
 
 	if err != nil {
 		resp.WriteHeaderAndEntity(http.StatusBadRequest, errors.Wrap(err))
