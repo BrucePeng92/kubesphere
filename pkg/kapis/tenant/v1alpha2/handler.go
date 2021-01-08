@@ -43,18 +43,21 @@ import (
 
 type tenantHandler struct {
 	tenant tenant.Interface
+	im            im.IdentityManagementInterface
 }
 
-func newTenantHandler(factory informers.InformerFactory, k8sclient kubernetes.Interface, ksclient kubesphere.Interface, evtsClient events.Client, loggingClient logging.Interface, auditingclient auditing.Client) *tenantHandler {
+func newTenantHandler(factory informers.InformerFactory, k8sclient kubernetes.Interface, ksclient kubesphere.Interface, evtsClient events.Client, loggingClient logging.Interface, auditingclient auditing.Client, im im.IdentityManagementInterface) *tenantHandler {
 
 	return &tenantHandler{
 		tenant: tenant.New(factory, k8sclient, ksclient, evtsClient, loggingClient, auditingclient),
+		im:im
 	}
 }
 
 func (h *tenantHandler) ListWorkspaces(req *restful.Request, resp *restful.Response) {
 	user, ok := request.UserFrom(req.Request.Context())
 	queryParam := query.ParseQueryParameter(req)
+	userBaomi, err := getUserBaomiInfo(request)
 
 	if !ok {
 		err := fmt.Errorf("cannot obtain user info")
@@ -63,7 +66,7 @@ func (h *tenantHandler) ListWorkspaces(req *restful.Request, resp *restful.Respo
 		return
 	}
 
-	result, err := h.tenant.ListWorkspaces(user, queryParam)
+	result, err := h.tenant.ListWorkspaces(user, queryParam, userBaomi)
 
 	if err != nil {
 		api.HandleInternalError(resp, nil, err)
@@ -98,6 +101,8 @@ func (h *tenantHandler) ListNamespaces(req *restful.Request, resp *restful.Respo
 	workspace := req.PathParameter("workspace")
 	queryParam := query.ParseQueryParameter(req)
 
+	userBaomi, err := getUserBaomiInfo(request)
+	
 	var workspaceMember user.Info
 	if username := req.PathParameter("workspacemember"); username != "" {
 		workspaceMember = &user.DefaultInfo{
@@ -114,7 +119,7 @@ func (h *tenantHandler) ListNamespaces(req *restful.Request, resp *restful.Respo
 		workspaceMember = requestUser
 	}
 
-	result, err := h.tenant.ListNamespaces(workspaceMember, workspace, queryParam)
+	result, err := h.tenant.ListNamespaces(workspaceMember, workspace, queryParam, userBaomi)
 	if err != nil {
 		api.HandleInternalError(resp, nil, err)
 		return
@@ -156,6 +161,7 @@ func (h *tenantHandler) ListDevOpsProjects(req *restful.Request, resp *restful.R
 func (h *tenantHandler) CreateNamespace(request *restful.Request, response *restful.Response) {
 	workspace := request.PathParameter("workspace")
 	var namespace corev1.Namespace
+	userBaomi, err := getUserBaomiInfo(request)
 
 	err := request.ReadEntity(&namespace)
 
@@ -164,7 +170,7 @@ func (h *tenantHandler) CreateNamespace(request *restful.Request, response *rest
 		api.HandleBadRequest(response, request, err)
 		return
 	}
-
+	namespace.Annotations["scheduler.alpha.kubernetes.io/node-selector"] = "baomi=" + userBaomi
 	created, err := h.tenant.CreateNamespace(workspace, &namespace)
 
 	if err != nil {
@@ -182,6 +188,7 @@ func (h *tenantHandler) CreateNamespace(request *restful.Request, response *rest
 
 func (h *tenantHandler) CreateWorkspace(request *restful.Request, response *restful.Response) {
 	var workspace tenantv1alpha2.WorkspaceTemplate
+	userBaomi, err := getUserBaomiInfo(request)
 
 	err := request.ReadEntity(&workspace)
 
@@ -190,7 +197,7 @@ func (h *tenantHandler) CreateWorkspace(request *restful.Request, response *rest
 		api.HandleBadRequest(response, request, err)
 		return
 	}
-
+	workspace.Annotations["baomi"] = "baomi=" + userBaomi
 	created, err := h.tenant.CreateWorkspace(&workspace)
 
 	if err != nil {
@@ -264,8 +271,9 @@ func (h *tenantHandler) UpdateWorkspace(request *restful.Request, response *rest
 
 func (h *tenantHandler) DescribeWorkspace(request *restful.Request, response *restful.Response) {
 	workspaceName := request.PathParameter("workspace")
+	userBaomi,err := getUserBaomiInfo(request)
 
-	workspace, err := h.tenant.DescribeWorkspace(workspaceName)
+	workspace, err := h.tenant.DescribeWorkspace(workspaceName, userBaomi)
 
 	if err != nil {
 		klog.Error(err)
@@ -282,8 +290,9 @@ func (h *tenantHandler) DescribeWorkspace(request *restful.Request, response *re
 
 func (h *tenantHandler) ListWorkspaceClusters(request *restful.Request, response *restful.Response) {
 	workspaceName := request.PathParameter("workspace")
+	userBaomi,err := getUserBaomiInfo(request)
 
-	result, err := h.tenant.ListWorkspaceClusters(workspaceName)
+	result, err := h.tenant.ListWorkspaceClusters(workspaceName, userBaomi)
 
 	if err != nil {
 		klog.Error(err)
@@ -385,10 +394,26 @@ func (h *tenantHandler) Auditing(req *restful.Request, resp *restful.Response) {
 
 }
 
+func getUserBaomiInfo(req *restful.Request) (string, error) {
+	user, ok := request.UserFrom(req.Request.Context())
+	if !ok {
+		err := fmt.Errorf("cannot obtain user info")
+		return nil, err
+	}
+	imuser, err := h.im.DescribeUser(user.GetName())
+	if err != nil{
+		err := fmt.Errorf("cannot obtain user info")
+		return nil, err
+	}
+	userBaomi := imuser.Annotations["baomi"]
+	return userBaomi, nil
+}
+
 func (h *tenantHandler) DescribeNamespace(request *restful.Request, response *restful.Response) {
+	userBaomi,err := getUserBaomiInfo(request)
 	workspaceName := request.PathParameter("workspace")
 	namespaceName := request.PathParameter("namespace")
-	ns, err := h.tenant.DescribeNamespace(workspaceName, namespaceName)
+	ns, err := h.tenant.DescribeNamespace(workspaceName, namespaceName, userBaomi)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -405,8 +430,8 @@ func (h *tenantHandler) DescribeNamespace(request *restful.Request, response *re
 func (h *tenantHandler) DeleteNamespace(request *restful.Request, response *restful.Response) {
 	workspaceName := request.PathParameter("workspace")
 	namespaceName := request.PathParameter("namespace")
-
-	err := h.tenant.DeleteNamespace(workspaceName, namespaceName)
+	userBaomi,err := getUserBaomiInfo(request)
+	err := h.tenant.DeleteNamespace(workspaceName, namespaceName, userBaomi)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -423,6 +448,8 @@ func (h *tenantHandler) DeleteNamespace(request *restful.Request, response *rest
 func (h *tenantHandler) UpdateNamespace(request *restful.Request, response *restful.Response) {
 	workspaceName := request.PathParameter("workspace")
 	namespaceName := request.PathParameter("namespace")
+	userBaomi,err := getUserBaomiInfo(request)
+
 
 	var namespace corev1.Namespace
 	err := request.ReadEntity(&namespace)
@@ -439,7 +466,7 @@ func (h *tenantHandler) UpdateNamespace(request *restful.Request, response *rest
 		return
 	}
 
-	updated, err := h.tenant.UpdateNamespace(workspaceName, &namespace)
+	updated, err := h.tenant.UpdateNamespace(workspaceName, &namespace, userBaomi)
 
 	if err != nil {
 		klog.Error(err)
@@ -461,6 +488,7 @@ func (h *tenantHandler) UpdateNamespace(request *restful.Request, response *rest
 func (h *tenantHandler) PatchNamespace(request *restful.Request, response *restful.Response) {
 	workspaceName := request.PathParameter("workspace")
 	namespaceName := request.PathParameter("namespace")
+	userBaomi,err := getUserBaomiInfo(request)
 
 	var namespace corev1.Namespace
 	err := request.ReadEntity(&namespace)
@@ -472,7 +500,7 @@ func (h *tenantHandler) PatchNamespace(request *restful.Request, response *restf
 
 	namespace.Name = namespaceName
 
-	patched, err := h.tenant.PatchNamespace(workspaceName, &namespace)
+	patched, err := h.tenant.PatchNamespace(workspaceName, &namespace, userBaomi)
 
 	if err != nil {
 		klog.Error(err)
@@ -522,13 +550,14 @@ func (h *tenantHandler) PatchWorkspace(request *restful.Request, response *restf
 
 func (h *tenantHandler) ListClusters(r *restful.Request, response *restful.Response) {
 	user, ok := request.UserFrom(r.Request.Context())
+	userBaomi,err := getUserBaomiInfo(request)
 
 	if !ok {
 		response.WriteEntity([]interface{}{})
 		return
 	}
 
-	result, err := h.tenant.ListClusters(user)
+	result, err := h.tenant.ListClusters(user, userBaomi)
 
 	if err != nil {
 		klog.Error(err)
