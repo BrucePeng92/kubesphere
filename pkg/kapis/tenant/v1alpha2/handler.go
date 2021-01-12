@@ -198,7 +198,7 @@ func (h *tenantHandler) CreateWorkspace(request *restful.Request, response *rest
 		api.HandleBadRequest(response, request, err)
 		return
 	}
-	workspace.Annotations["baomi"] = "baomi=" + userBaomi
+	workspace.Annotations["baomi"] = userBaomi
 	created, err := h.tenant.CreateWorkspace(&workspace)
 
 	if err != nil {
