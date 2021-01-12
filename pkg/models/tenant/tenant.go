@@ -75,7 +75,7 @@ type Interface interface {
 	QueryLogs(user user.Info, query *loggingv1alpha2.Query) (*loggingv1alpha2.APIResponse, error)
 	ExportLogs(user user.Info, query *loggingv1alpha2.Query, writer io.Writer) error
 	Auditing(user user.Info, queryParam *auditingv1alpha1.Query) (*auditingv1alpha1.APIResponse, error)
-	DescribeNamespace(workspace, namespace string, user user.Info) (*corev1.Namespace, error)
+	DescribeNamespace(workspace, namespace string, userBaomi string) (*corev1.Namespace, error)
 	DeleteNamespace(workspace, namespace string, userBaomi string) error
 	UpdateNamespace(workspace string, namespace *corev1.Namespace, userBaomi string) (*corev1.Namespace, error)
 	PatchNamespace(workspace string, namespace *corev1.Namespace, userBaomi string) (*corev1.Namespace, error)
