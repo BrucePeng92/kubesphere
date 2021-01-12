@@ -417,16 +417,11 @@ func (t *tenantOperator) DescribeWorkspace(workspace string, userBaomi string) (
 		klog.Error(err)
 		return nil, err
 	}
-	klog.Info(obj)
-
 	ws := obj.(*tenantv1alpha2.WorkspaceTemplate)
-	klog.Info(ws)
-
 	workspaceBaomi := ws.GetAnnotations()["baomi"]
-	klog.Info(workspaceBaomi)
-
 	pass, err := baomi.IsContain(userBaomi, workspaceBaomi)
 	if !pass || err != nil {
+		err = errors.NewNotFound(corev1.Resource("namespace"), ws.GetName())
 		klog.Error(err)
 		return nil, err
 	}
