@@ -129,10 +129,24 @@ func (t *tenantOperator) ListWorkspaces(user user.Info, queryParam *query.Query,
 	// allowed to list all workspaces
 	if decision == authorizer.DecisionAllow {
 		result, err := t.resourceGetter.List(tenantv1alpha2.ResourcePluralWorkspaceTemplate, "", queryParam)
+		wss := make([]runtime.Object, 0)
+		for _, obj := range result.Items {
+			ws := obj.(*tenantv1alpha2.WorkspaceTemplate)
+			workspaceBaomi := ws.Annotations["baomi"]
+			pass, err := baomi.IsContain(userBaomi, workspaceBaomi)
+			if pass && err == nil {
+				wss = append(wss, ws)
+			}
+		}
 		if err != nil {
 			klog.Error(err)
 			return nil, err
 		}
+		result = resources.DefaultList(wss, queryParam, func(left runtime.Object, right runtime.Object, field query.Field) bool {
+			return resources.DefaultObjectMetaCompare(left.(*tenantv1alpha2.WorkspaceTemplate).ObjectMeta, right.(*tenantv1alpha2.WorkspaceTemplate).ObjectMeta, field)
+		}, func(workspace runtime.Object, filter query.Filter) bool {
+			return resources.DefaultObjectMetaFilter(workspace.(*tenantv1alpha2.WorkspaceTemplate).ObjectMeta, filter)
+		})
 		return result, nil
 	}
 
