@@ -19,6 +19,7 @@ package v1alpha2
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/emicklei/go-restful"
 	corev1 "k8s.io/api/core/v1"
@@ -74,6 +75,14 @@ func (h *tenantHandler) ListWorkspaces(req *restful.Request, resp *restful.Respo
 		return
 	}
 
+	resp.WriteEntity(result)
+}
+
+func (h *tenantHandler) GetHarbor(req *restful.Request, resp *restful.Response) {
+	harborURL := os.Getenv("HARBOR_URL")
+	result := struct {
+		harborURL string `json:"harbor_url"`
+	}{harborURL: harborURL}
 	resp.WriteEntity(result)
 }
 

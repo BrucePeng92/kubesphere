@@ -100,6 +100,12 @@ func AddToContainer(c *restful.Container, im im.IdentityManagementInterface, fac
 		Doc("List all workspaces that belongs to the current user").
 		Metadata(restfulspec.KeyOpenAPITags, []string{constants.TenantResourcesTag}))
 
+	ws.Route(ws.GET("/harbor").
+		To(handler.GetHarbor).
+		Returns(http.StatusOK, api.StatusOK, models.PageableResponse{}).
+		Doc("Get the unique private registry address").
+		Metadata(restfulspec.KeyOpenAPITags, []string{constants.TenantResourcesTag}))
+
 	ws.Route(ws.GET("/workspaces/{workspace}").
 		To(handler.DescribeWorkspace).
 		Param(ws.PathParameter("workspace", "workspace name")).

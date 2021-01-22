@@ -368,8 +368,8 @@ func (t *tenantOperator) DescribeNamespace(workspace, namespace string, userBaom
 	annotations := ns.GetAnnotations()
 	nodeSelector := annotations["scheduler.alpha.kubernetes.io/node-selector"]
 	label := strings.Split(nodeSelector, "=")
-	nsBaomi := ""
-	if len(label) > 0 {
+	nsBaomi := "gongkai"
+	if len(label) > 1 {
 		nsBaomi = label[1]
 	}
 	pass, err := baomi.IsContain(userBaomi, nsBaomi)

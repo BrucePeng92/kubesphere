@@ -21,15 +21,16 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"k8s.io/klog"
-	"kubesphere.io/kubesphere/pkg/apiserver/auditing/v1alpha1"
 	"net/http"
 	"time"
+
+	"k8s.io/klog"
+	"kubesphere.io/kubesphere/pkg/apiserver/auditing/v1alpha1"
 )
 
 const (
 	WaitTimeout = time.Second
-	WebhookURL  = "https://kube-auditing-webhook-svc.kubesphere-logging-system.svc:443/audit/webhook/event"
+	WebhookURL  = "http://kube-auditing-webhook-svc.kubesphere-logging-system.svc:8080/audit/webhook/event"
 )
 
 type Backend struct {

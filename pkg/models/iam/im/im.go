@@ -148,7 +148,9 @@ func (im *defaultIMOperator) DeleteUser(username string) error {
 }
 
 func (im *defaultIMOperator) CreateUser(user *iamv1alpha2.User) (*iamv1alpha2.User, error) {
-	user.Annotations["baomi"] = "gongkai"
+	if user.Annotations["baomi"] == "" {
+		user.Annotations["baomi"] = "gongkai"
+	}
 	user, err := im.ksClient.IamV1alpha2().Users().Create(user)
 	if err != nil {
 		klog.Error(err)
