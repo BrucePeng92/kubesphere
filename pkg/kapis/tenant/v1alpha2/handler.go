@@ -80,9 +80,9 @@ func (h *tenantHandler) ListWorkspaces(req *restful.Request, resp *restful.Respo
 
 func (h *tenantHandler) GetHarbor(req *restful.Request, resp *restful.Response) {
 	harborURL := os.Getenv("HARBOR_URL")
-	result := struct {
-		harborURL string `json:"harbor_url"`
-	}{harborURL: harborURL}
+	result := map[string]string{
+		"url": harborURL,
+	}
 	resp.WriteEntity(result)
 }
 
